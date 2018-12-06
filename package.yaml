@@ -1,0 +1,53 @@
+name:                kafkaproducer
+version:             0.1.0.0
+github:              "toxicafunk/kafkaproducer"
+license:             BSD3
+author:              "Eric Noam"
+maintainer:          "toxicafunk@gmail.com"
+copyright:           "Copyright 2018 Eric Rodriguez. All rights reserved."
+
+extra-source-files:
+- README.md
+- ChangeLog.md
+
+# Metadata used when publishing your package
+# synopsis:            Short description of your package
+# category:            Web
+
+# To avoid duplicated efforts in documentation and dealing with the
+# complications of embedding Haddock markup inside cabal files, it is
+# common to point users to the README.md file.
+description:         Please see the README on GitHub at <https://github.com/toxicafunk/kafkaproducer#readme>
+
+dependencies:
+- base >= 4.7 && < 5
+- haskakafka >= 1.2.0
+- parallel == 3.2.*
+- async >= 2.1.0
+- bytestring >= 0.10.8.2
+
+library:
+  source-dirs: src
+
+executables:
+  kafkaproducer-exe:
+    main:                Main.hs
+    source-dirs:         app
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    - -eventlog
+    dependencies:
+    - kafkaproducer
+
+tests:
+  kafkaproducer-test:
+    main:                Spec.hs
+    source-dirs:         test
+    ghc-options:
+    - -threaded
+    - -rtsopts
+    - -with-rtsopts=-N
+    dependencies:
+    - kafkaproducer

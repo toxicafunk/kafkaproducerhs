@@ -1,0 +1,5 @@
+.stack-work/
+kafkaproducer.cabal
+*~
+*.prof
+*.eventlog
