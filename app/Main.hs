@@ -28,9 +28,11 @@ processMessage producer line = sendMessage producer (C8.pack line) (extractKey l
 main :: IO ()
 main = do
   [f] <- getArgs
-  let producer = withKafkaProducer [] [] "172.18.0.2:9092,172.18.0.4:9092,172.18.0.5:9092" "julio.genio.stream"
+  let kafkaConfig = [("queue.buffering.max.ms", "0"),
+                     ("request.timeout.ms", "5000"),
+                     ("message.timeout.ms", "300000")]
+      producer = withKafkaProducer kafkaConfig [] "172.18.0.2:9092,172.18.0.4:9092,172.18.0.5:9092" "julio.genio.stream"
   file <- readFile f
 
-  let keys = mapConcurrently (processMessage producer) (lines file) --`using` parList rseq
-  let ms = mapM (>>= return) keys
-  print (length $ filter ms)
+  let ios = mapConcurrently (processMessage producer) (lines file) --`using` parList rseq
+  ios >>= \lst -> print (length $ filter isJust lst)
