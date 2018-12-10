@@ -9,7 +9,7 @@ import Control.Monad (forM_)
 import Control.Concurrent.Async
 import Data.ByteString (ByteString, length, drop, take, readFile)
 import Data.ByteString.Char8 (dropWhile, lines, takeWhile)
-import Data.Either (isRight)
+import Data.Maybe (isJust)
 import qualified Data.Foldable as F (length)
 import Kafka.Producer
 
@@ -29,19 +29,15 @@ main = do
   producer  <- newProducer producerProps
   --ioEithers <- sequence $ parMap rseq (processMessage producer) (lines file) --`using` parList rseq)
   ioEithers <- mapConcurrently (processMessage producer) (lines file)
-  print $ F.length $ filter isRight ioEithers
+  print $ F.length $ filter isJust ioEithers
 
-processMessage :: Either KafkaError KafkaProducer -> ByteString -> IO (Either KafkaError ())
+processMessage :: Either KafkaError KafkaProducer -> ByteString -> IO (Maybe KafkaError)
 processMessage (Right producer) line = sendMessage producer (extractKey line) line
-processMessage (Left err) line = return (Left err)
+processMessage (Left err) line = return (Just err)
 
 
-sendMessage :: KafkaProducer -> ByteString -> ByteString -> IO (Either KafkaError ())
-sendMessage prod key msg = do
-  err2 <- produceMessage prod (mkMessage (Just key) (Just msg))
-  forM_ err2 print
-
-  return $ Right ()
+sendMessage :: KafkaProducer -> ByteString -> ByteString -> IO (Maybe KafkaError)
+sendMessage prod key msg = produceMessage prod (mkMessage (Just key) (Just msg))
 
 mkMessage :: Maybe ByteString -> Maybe ByteString -> ProducerRecord
 mkMessage k v = ProducerRecord
