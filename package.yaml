@@ -21,7 +21,7 @@ description:         Please see the README on GitHub at <https://github.com/toxi
 
 dependencies:
 - base >= 4.7 && < 5
-- haskakafka >= 1.2.0
+- hw-kafka-client >= 2.5.0
 - parallel == 3.2.*
 - async >= 2.1.0
 - bytestring >= 0.10.8.2

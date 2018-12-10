@@ -1,38 +1,56 @@
+{-# LANGUAGE OverloadedStrings #-}
 module Main where
 
+import Prelude hiding (readFile, lines, length, drop, dropWhile, take, takeWhile)
 import System.Environment (getArgs)
-import Control.Exception
-import Control.Parallel.Strategies
+import Control.Exception (bracket)
+import Control.Monad (forM_)
 import Control.Applicative
 import Control.Concurrent.Async
-import Data.Maybe
-import Haskakafka
-import qualified Data.ByteString.Char8 as C8
+import Data.ByteString (ByteString, length, drop, take, readFile)
+import Data.ByteString.Char8 (dropWhile, lines, takeWhile)
+import Data.Either (isRight)
+import qualified Data.Foldable as F (length)
+import Kafka.Producer
 
-type Producer = (Kafka -> KafkaTopic -> IO (Maybe KafkaError)) -> IO (Maybe KafkaError)
 
-sendMessage :: Producer -> C8.ByteString -> C8.ByteString -> IO (Maybe KafkaError)
-sendMessage producer msg key = producer $ \kafka topic -> do
-    let keyMessage = KafkaProduceKeyedMessage key msg
-    produceKeyedMessage topic keyMessage
+producerProps :: ProducerProperties
+producerProps = brokersList [BrokerAddress "172.18.0.2:9092,172.18.0.4:9092,172.18.0.5:9092"]
+             <> logLevel KafkaLogDebug
 
-extractKey :: String -> C8.ByteString
-extractKey line = {-# SCC "extractKey" #-} do
-  let from_comma = dropWhile (/= ':') line
-  let txt = drop 2 $ takeWhile (/= ',') from_comma
-  C8.pack $ take (length txt - 1) txt
-
-processMessage :: Producer -> String -> IO (Maybe KafkaError)
-processMessage producer line = sendMessage producer (C8.pack line) (extractKey line)
+targetTopic :: TopicName
+targetTopic = TopicName "julio.genio.stream"
 
 main :: IO ()
 main = do
   [f] <- getArgs
-  let kafkaConfig = [("queue.buffering.max.ms", "0"),
-                     ("request.timeout.ms", "5000"),
-                     ("message.timeout.ms", "300000")]
-      producer = withKafkaProducer kafkaConfig [] "172.18.0.2:9092,172.18.0.4:9092,172.18.0.5:9092" "julio.genio.stream"
   file <- readFile f
+  producer  <- newProducer producerProps
+  ioEithers <- mapConcurrently (processMessage producer) (lines file)
+  print $ F.length $ filter isRight ioEithers
 
-  let ios = mapConcurrently (processMessage producer) (lines file) --`using` parList rseq
-  ios >>= \lst -> print (length $ filter isJust lst)
+processMessage :: Either KafkaError KafkaProducer -> ByteString -> IO (Either KafkaError ())
+processMessage (Right producer) line = sendMessage producer (extractKey line) line
+processMessage (Left err) line = return (Left err)
+
+
+sendMessage :: KafkaProducer -> ByteString -> ByteString -> IO (Either KafkaError ())
+sendMessage prod key msg = do
+  err2 <- produceMessage prod (mkMessage (Just key) (Just msg))
+  forM_ err2 print
+
+  return $ Right ()
+
+mkMessage :: Maybe ByteString -> Maybe ByteString -> ProducerRecord
+mkMessage k v = ProducerRecord
+                  { prTopic = targetTopic
+                  , prPartition = UnassignedPartition
+                  , prKey = k
+                  , prValue = v
+                  }
+
+extractKey :: ByteString -> ByteString
+extractKey line = do
+  let from_comma = dropWhile (/= ':') line
+  let txt = drop 2 $ takeWhile (/= ',') from_comma
+  take (length txt - 1) txt
