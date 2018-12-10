@@ -3,9 +3,9 @@ module Main where
 
 import Prelude hiding (readFile, lines, length, drop, dropWhile, take, takeWhile)
 import System.Environment (getArgs)
-import Control.Exception (bracket)
+import Control.Exception
 import Control.Monad (forM_)
-import Control.Applicative
+--import Control.Applicative
 import Control.Concurrent.Async
 import Data.ByteString (ByteString, length, drop, take, readFile)
 import Data.ByteString.Char8 (dropWhile, lines, takeWhile)
@@ -13,6 +13,7 @@ import Data.Either (isRight)
 import qualified Data.Foldable as F (length)
 import Kafka.Producer
 
+--import Control.Parallel.Strategies
 
 producerProps :: ProducerProperties
 producerProps = brokersList [BrokerAddress "172.18.0.2:9092,172.18.0.4:9092,172.18.0.5:9092"]
@@ -26,6 +27,7 @@ main = do
   [f] <- getArgs
   file <- readFile f
   producer  <- newProducer producerProps
+  --ioEithers <- sequence $ parMap rseq (processMessage producer) (lines file) --`using` parList rseq)
   ioEithers <- mapConcurrently (processMessage producer) (lines file)
   print $ F.length $ filter isRight ioEithers
 
