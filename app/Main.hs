@@ -9,6 +9,7 @@ import Control.Concurrent.Async
 import Data.ByteString (ByteString, length, drop, take, readFile)
 import Data.ByteString.Char8 (dropWhile, lines, takeWhile)
 import Data.Maybe (isNothing)
+import Data.Either
 import qualified Data.Foldable as F (length)
 import Kafka.Producer
 
@@ -26,13 +27,14 @@ main = do
   [f] <- getArgs
   file <- readFile f
   producer  <- newProducer producerProps
-  ioMaybes <- mapConcurrently (processMessage producer) (lines file)
-  print $ F.length $ filter isNothing ioMaybes
+  case producer of
+    Left err -> print err
+    Right producer -> do
+      ioMaybes <- mapConcurrently (processMessage producer) (lines file)
+      print $ F.length $ filter isNothing ioMaybes
 
-processMessage :: Either KafkaError KafkaProducer -> ByteString -> IO (Maybe KafkaError)
-processMessage (Right producer) line = sendMessage producer (extractKey line) line
-processMessage (Left err) line = return (Just err)
-
+processMessage :: KafkaProducer -> ByteString -> IO (Maybe KafkaError)
+processMessage producer line = sendMessage producer (extractKey line) line
 
 sendMessage :: KafkaProducer -> ByteString -> ByteString -> IO (Maybe KafkaError)
 sendMessage prod key msg = produceMessage prod (mkMessage (Just key) (Just msg))
