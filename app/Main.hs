@@ -3,8 +3,7 @@ module Main where
 
 import Prelude hiding (readFile, lines, length, drop, dropWhile, take, takeWhile)
 import System.Environment (getArgs)
-import Control.Exception
-import Control.Monad (forM_)
+import Control.Exception (bracket)
 import Control.Concurrent.Async
 import Data.ByteString (ByteString, length, drop, take, readFile)
 import Data.ByteString.Char8 (dropWhile, lines, takeWhile)
@@ -23,13 +22,15 @@ targetTopic :: TopicName
 targetTopic = TopicName "julio.genio.stream"
 
 main :: IO ()
-main = do
-  [f] <- getArgs
-  file <- readFile f
-  producer  <- newProducer producerProps
-  case producer of
-    Left err -> print err
-    Right producer -> do
+main = bracket createProducer close runHandler
+  where
+    createProducer         = newProducer producerProps
+    close (Left err)       = print err
+    close (Right producer) = closeProducer producer
+    runHandler (Left err)  = print err
+    runHandler (Right producer) = do
+      [f] <- getArgs
+      file <- readFile f
       ioMaybes <- mapConcurrently (processMessage producer) (lines file)
       print $ F.length $ filter isNothing ioMaybes
 
