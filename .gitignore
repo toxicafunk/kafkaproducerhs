@@ -3,3 +3,4 @@ kafkaproducer.cabal
 *~
 *.prof
 *.eventlog
+.idea

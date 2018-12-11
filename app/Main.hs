@@ -5,11 +5,10 @@ import Prelude hiding (readFile, lines, length, drop, dropWhile, take, takeWhile
 import System.Environment (getArgs)
 import Control.Exception
 import Control.Monad (forM_)
---import Control.Applicative
 import Control.Concurrent.Async
 import Data.ByteString (ByteString, length, drop, take, readFile)
 import Data.ByteString.Char8 (dropWhile, lines, takeWhile)
-import Data.Maybe (isJust)
+import Data.Maybe (isNothing)
 import qualified Data.Foldable as F (length)
 import Kafka.Producer
 
@@ -27,9 +26,8 @@ main = do
   [f] <- getArgs
   file <- readFile f
   producer  <- newProducer producerProps
-  --ioEithers <- sequence $ parMap rseq (processMessage producer) (lines file) --`using` parList rseq)
-  ioEithers <- mapConcurrently (processMessage producer) (lines file)
-  print $ F.length $ filter isJust ioEithers
+  ioMaybes <- mapConcurrently (processMessage producer) (lines file)
+  print $ F.length $ filter isNothing ioMaybes
 
 processMessage :: Either KafkaError KafkaProducer -> ByteString -> IO (Maybe KafkaError)
 processMessage (Right producer) line = sendMessage producer (extractKey line) line
