@@ -38,7 +38,6 @@ packages:
 # using the same syntax as the packages field.
 # (e.g., acme-missiles-0.3)
 extra-deps:
-- hw-kafka-client-2.5.0@sha256:20279c1055067037f78d1b6a9afb0ba7445cb3ee9910b9b104bcf21a989e4957
 
 # Override default flag values for local packages and extra-deps
 # flags: {}
