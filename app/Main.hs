@@ -19,6 +19,8 @@ import Network.Kafka
 import Network.Kafka.Producer
 import Network.Kafka.Protocol (ProduceResponse(..), KafkaError(..), CompressionCodec(..), Message, TopicName)
 
+type KafkaResult = StateT KafkaState (ExceptT KafkaClientError IO)
+
 main :: IO ()
 main =  do
   let topic = "julio.genio.stream"
@@ -32,16 +34,18 @@ main =  do
   [f] <- getArgs
   file <- readFile f
   result <- run $ do
-        requireAllAcks
-        processMessages topic (lines file)
-  print result
+    requireAllAcks
+    fmap concat . sequence $ fmap (processMessages topic) (lines file)
+  case result of
+    Right arr -> print $ F.length arr
+    Left err -> print err
 
-processMessages :: TopicName -> [ByteString] -> StateT KafkaState (ExceptT KafkaClientError IO) [ProduceResponse]
-processMessages topic lineArr = produceMessages $ mkMessage topic lineArr
+processMessages :: TopicName -> ByteString -> KafkaResult [ProduceResponse]
+processMessages topic line = produceMessages $ [mkMessage topic line]
 
-mkMessage :: TopicName -> [ByteString] -> [TopicAndMessage]
-mkMessage topic msgs =
-  fmap (TopicAndMessage topic . toTopicMessage) msgs
+mkMessage :: TopicName -> ByteString -> TopicAndMessage
+mkMessage topic msg =
+  (TopicAndMessage topic . toTopicMessage) msg
   where
     toTopicMessage :: ByteString -> Message
     toTopicMessage msg = makeKeyedMessage (extractKey msg) msg
