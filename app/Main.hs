@@ -6,6 +6,7 @@ import System.Environment (getArgs)
 import Control.Exception (bracket)
 --import Control.Concurrent.Async
 import Control.Lens
+import Control.Monad (join)
 import Control.Monad.Except (catchError, throwError)
 import Control.Monad.Trans (liftIO)
 import Control.Monad.Trans.State.Lazy (StateT)
@@ -35,17 +36,23 @@ main =  do
   file <- readFile f
   result <- run $ do
     requireAllAcks
-    fmap concat . sequence $ fmap (processMessages topic) (lines file)
+    traverseJoin id $ fmap (processMessages topic) (lines file)
   case result of
     Right arr -> print $ F.length arr
     Left err -> print err
+
+traverseJoin :: (Monad m, Traversable m, Applicative f) => (a -> f (m b)) -> m a -> f (m b)
+traverseJoin f = fmap join . traverse f
+
+sequenceJoin :: [KafkaResult [ProduceResponse]] -> KafkaResult [ProduceResponse]
+sequenceJoin = traverseJoin id
 
 processMessages :: TopicName -> ByteString -> KafkaResult [ProduceResponse]
 processMessages topic line = produceMessages $ [mkMessage topic line]
 
 mkMessage :: TopicName -> ByteString -> TopicAndMessage
-mkMessage topic msg =
-  (TopicAndMessage topic . toTopicMessage) msg
+mkMessage topic =
+  (TopicAndMessage topic . toTopicMessage)
   where
     toTopicMessage :: ByteString -> Message
     toTopicMessage msg = makeKeyedMessage (extractKey msg) msg
