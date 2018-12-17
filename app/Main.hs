@@ -18,34 +18,36 @@ import qualified Data.Foldable as F (length)
 import Network.Kafka
 import Network.Kafka.Producer
 import Network.Kafka.Protocol (ProduceResponse(..), KafkaError(..), CompressionCodec(..), Message, TopicName)
+import Conduit
 
 type KafkaResult = StateT KafkaState (ExceptT KafkaClientError IO)
 
 main :: IO ()
 main =  do
   let topic = "julio.genio.stream"
-      bootstrapServers = "172.18.0.3"
+      bootstrapServers = "172.18.0.2"
       run = runKafka $ mkKafkaState "milena-test-client" (bootstrapServers, 9092)
       requireAllAcks = do
         stateRequiredAcks .= -1
         stateWaitSize .= 1
         stateWaitTime .= 1000
+      client arr = run $ do
+        requireAllAcks
+        fmap concat . sequence $ fmap (sendMessages topic) arr
 
   [f] <- getArgs
   file <- readFile f
-  result <- run $ do
-    requireAllAcks
-    fmap concat . sequence $ fmap (processMessages topic) (lines file)
+  result <- client (lines file)
   case result of
     Right arr -> print $ F.length arr
     Left err -> print err
 
-processMessages :: TopicName -> ByteString -> KafkaResult [ProduceResponse]
-processMessages topic line = produceMessages $ [mkMessage topic line]
+sendMessages :: TopicName -> ByteString -> KafkaResult [ProduceResponse]
+sendMessages topic line = produceMessages [mkMessage topic line]
 
 mkMessage :: TopicName -> ByteString -> TopicAndMessage
-mkMessage topic msg =
-  (TopicAndMessage topic . toTopicMessage) msg
+mkMessage topic =
+  (TopicAndMessage topic . toTopicMessage)
   where
     toTopicMessage :: ByteString -> Message
     toTopicMessage msg = makeKeyedMessage (extractKey msg) msg
