@@ -1,4 +1,6 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
+
 module Main where
 
 import Prelude hiding (readFile, lines, length, drop, dropWhile, take, takeWhile)
@@ -19,6 +21,7 @@ import Network.Kafka
 import Network.Kafka.Producer
 import Network.Kafka.Protocol (ProduceResponse(..), KafkaError(..), CompressionCodec(..), Message, TopicName)
 import Conduit
+import qualified Data.Conduit.Combinators as CC
 
 type KafkaResult = StateT KafkaState (ExceptT KafkaClientError IO)
 
@@ -31,16 +34,20 @@ main =  do
         stateRequiredAcks .= -1
         stateWaitSize .= 1
         stateWaitTime .= 1000
-      client arr = run $ do
+      client line = run $ do
         requireAllAcks
-        fmap concat . sequence $ fmap (sendMessages topic) arr
+        sendMessages topic line
 
   [f] <- getArgs
-  file <- readFile f
-  result <- client (lines file)
-  case result of
-    Right arr -> print $ F.length arr
-    Left err -> print err
+  withSourceFile f $ \src ->
+    runConduit
+     $ src
+     .| CC.linesUnboundedAscii
+     .| mapMC client
+     .| mapM_C (\case
+                   Left err -> print err
+                   _ -> return ())
+     -- .| sinkNull
 
 sendMessages :: TopicName -> ByteString -> KafkaResult [ProduceResponse]
 sendMessages topic line = produceMessages [mkMessage topic line]
