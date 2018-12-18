@@ -1,4 +1,5 @@
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE LambdaCase #-}
 module Main where
 
 import Prelude hiding (readFile, lines, length, drop, dropWhile, take, takeWhile)
@@ -11,6 +12,8 @@ import Data.Maybe (isNothing)
 import Data.Either
 import qualified Data.Foldable as F (length)
 import Kafka.Producer
+import Conduit
+import qualified Data.Conduit.Combinators as CC
 
 --import Control.Parallel.Strategies
 
@@ -30,9 +33,15 @@ main = bracket createProducer close runHandler
     runHandler (Left err)  = print err
     runHandler (Right producer) = do
       [f] <- getArgs
-      file <- readFile f
-      ioMaybes <- mapConcurrently (processMessage producer) (lines file)
-      print $ F.length $ filter isNothing ioMaybes
+      withSourceFile f $ \src ->
+        runConduit
+        $ src
+        .| CC.linesUnboundedAscii
+        .| mapMC (processMessage producer)
+        .| mapM_C (\case
+                      Just err -> print err
+                      _ -> return ()
+                  )
 
 processMessage :: KafkaProducer -> ByteString -> IO (Maybe KafkaError)
 processMessage producer line = sendMessage producer (extractKey line) line
