@@ -5,7 +5,6 @@ module Main where
 import Prelude hiding (readFile, lines, length, drop, dropWhile, take, takeWhile)
 import System.Environment (getArgs)
 import Control.Exception (bracket)
-import Control.Concurrent.Async
 import Data.ByteString (ByteString, length, drop, take, readFile)
 import Data.ByteString.Char8 (dropWhile, lines, takeWhile)
 import Data.Maybe (isNothing)
@@ -14,6 +13,7 @@ import qualified Data.Foldable as F (length)
 import Kafka.Producer
 import Conduit
 import qualified Data.Conduit.Combinators as CC
+import qualified Data.Conduit.Async as CA
 
 --import Control.Parallel.Strategies
 
@@ -34,10 +34,9 @@ main = bracket createProducer close runHandler
     runHandler (Right producer) = do
       [f] <- getArgs
       withSourceFile f $ \src ->
-        runConduit
+        CA.runCConduit
         $ src
-        .| CC.linesUnboundedAscii
-        .| mapMC (processMessage producer)
+        .| CA.buffer' 8 CC.linesUnboundedAscii  (mapC (processMessage producer))
         .| mapM_C (\case
                       Just err -> print err
                       _ -> return ()
