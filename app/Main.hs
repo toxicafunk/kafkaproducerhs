@@ -13,7 +13,7 @@ import qualified Data.Foldable as F (length)
 import Kafka.Producer
 import Conduit
 import qualified Data.Conduit.Combinators as CC
-import qualified Data.Conduit.Async as CA
+import Data.Conduit.Async
 
 --import Control.Parallel.Strategies
 
@@ -34,13 +34,14 @@ main = bracket createProducer close runHandler
     runHandler (Right producer) = do
       [f] <- getArgs
       withSourceFile f $ \src ->
-        CA.runCConduit
+        runCConduit
         $ src
-        .| CA.buffer' 8 CC.linesUnboundedAscii  (mapC (processMessage producer))
-        .| mapM_C (\case
-                      Just err -> print err
-                      _ -> return ()
-                  )
+        .| CC.linesUnboundedAscii
+        $=& mapC (processMessage producer)
+        $=& mapMC (\io -> io >>= (\case
+                         Just err -> print err
+                         _ -> return ()))
+        $=& sinkNull
 
 processMessage :: KafkaProducer -> ByteString -> IO (Maybe KafkaError)
 processMessage producer line = sendMessage producer (extractKey line) line
